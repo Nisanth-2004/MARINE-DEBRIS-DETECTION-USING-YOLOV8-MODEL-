@@ -1,0 +1,13 @@
+train: C:\Users\nisan\PycharmProjects\MARINE_\train\images
+val: C:\Users\nisan\PycharmProjects\MARINE_\valid\images
+test: C:\Users\nisan\PycharmProjects\MARINE_\test\images
+
+nc: 15
+names: ['Mask', 'can', 'cellphone', 'electronics', 'gbottle', 'glove', 'metal', 'misc', 'net', 'pbag', 'pbottle', 'plastic', 'rod', 'sunglasses', 'tire']
+
+roboflow:
+  workspace: project
+  project: underwater-65x5j
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/project/underwater-65x5j/dataset/3
