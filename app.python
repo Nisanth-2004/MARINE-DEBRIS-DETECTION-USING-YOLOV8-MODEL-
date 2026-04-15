@@ -1,0 +1,175 @@
+import streamlit as st
+import cv2
+import numpy as np
+from ultralytics import YOLO
+from PIL import Image
+import os
+import pandas as pd
+import base64
+from datetime import datetime
+
+# Set page config
+st.set_page_config(
+    page_title="Marine AI | Advanced Detection Dashboard",
+    page_icon="🌊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Load custom CSS
+def local_css(file_name):
+    with open(file_name) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+if os.path.exists("assets/style.css"):
+    local_css("assets/style.css")
+
+# Helper for encoding local images
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+
+# Load model (cached)
+@st.cache_resource
+def load_model():
+    model_path = "runs/detect/train/weights/best.pt"
+    if not os.path.exists(model_path):
+        model_path = "yolov8n.pt"
+    return YOLO(model_path)
+
+model = load_model()
+
+    # Sidebar
+with st.sidebar:
+    # Logo and Branding
+    logo_path = "marine_ai_logo_1775669911651.png" # Using the generated logo
+    if os.path.exists(logo_path):
+        encoded_logo = get_base64_image(logo_path)
+        st.markdown(
+            f'<div style="text-align: center;"><img src="data:image/png;base64,{encoded_logo}" width="150" style="margin-bottom: 20px; filter: drop-shadow(0 0 10px rgba(0,210,255,0.3));"></div>',
+            unsafe_allow_html=True
+        )
+    
+    st.markdown("<h2 class='gradient-text' style='text-align: center;'>Status</h2>", unsafe_allow_html=True)
+    
+    with st.expander("Display Options", expanded=True):
+        show_labels = st.checkbox("Show Labels", value=True)
+        show_conf = st.checkbox("Show Confidence Scores", value=True)
+
+    st.markdown("---")
+    st.markdown("### System Status")
+    st.success("Model: YOLOv8 (Active)")
+    st.info("System Ready for Analysis")
+
+# Set hardcoded professional defaults
+conf_threshold = 0.25
+iou_threshold = 0.45
+
+# Main Page Header
+header_col1, header_col2 = st.columns([2, 1])
+
+with header_col1:
+    st.markdown("<h1 class='gradient-text'>Marine Debris Detection AI</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 1.1rem; opacity: 0.7;'>Comprehensive underwater ecological monitoring and waste identification system.</p>", unsafe_allow_html=True)
+
+with header_col2:
+    st.markdown(f"<div style='text-align: right; padding-top: 25px;'><strong>Session:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M')}</div>", unsafe_allow_html=True)
+
+# Layout: Upload Zone
+st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Select an image for professional analysis...", type=["jpg", "jpeg", "png", "bmp"])
+st.markdown("</div>", unsafe_allow_html=True)
+
+if uploaded_file is not None:
+    # Read image
+    image = Image.open(uploaded_file)
+    img_array = np.array(image)
+    
+    # Run inference
+    with st.spinner("Processing through AI neural layers..."):
+        results = model.predict(source=img_array, conf=conf_threshold, iou=iou_threshold)
+        res_plotted = results[0].plot(labels=show_labels, conf=show_conf)
+        
+        detections = results[0].boxes
+        count = len(detections)
+        
+        # Prepare Data for Table
+        detection_data = []
+        for box in detections:
+            detection_data.append({
+                "Category": results[0].names[int(box.cls[0])],
+                "Confidence": f"{float(box.conf[0]):.2%}",
+                "X_Center": round(float(box.xywh[0][0]), 2),
+                "Y_Center": round(float(box.xywh[0][1]), 2),
+                "Width": round(float(box.xywh[0][2]), 2),
+                "Height": round(float(box.xywh[0][3]), 2)
+            })
+        df = pd.DataFrame(detection_data)
+
+    # Dashboard Metrics (Custom HTML)
+    avg_conf = np.mean([float(box.conf[0]) for box in detections]) if count > 0 else 0
+    top_class = df["Category"].mode()[0] if not df.empty else "None"
+
+    st.markdown(f"""
+    <div class="metric-container">
+        <div class="metric-card">
+            <div class="metric-label">Objects Identified</div>
+            <div class="metric-value">{count}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Avg. Confidence</div>
+            <div class="metric-value">{avg_conf:.1%}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Primary Debris Type</div>
+            <div class="metric-value">{top_class}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Visualization Columns
+    col_vis1, col_vis2 = st.columns(2)
+    
+    with col_vis1:
+        st.markdown("<div class='glass-card'><h4>Input Source</h4></div>", unsafe_allow_html=True)
+        st.image(image, use_container_width=True, caption="Source Feed")
+    
+    with col_vis2:
+        st.markdown("<div class='glass-card'><h4>Processed Neural Map</h4></div>", unsafe_allow_html=True)
+        st.image(res_plotted, use_container_width=True, caption="Model Inference Overlay")
+
+    # Detailed Analysis Section
+    st.markdown("---")
+    
+    st.markdown("### Detection Log & Spatial Data")
+    if not df.empty:
+        st.dataframe(df, use_container_width=True)
+        
+        # Export CSV
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Export Detection Report (CSV)",
+            data=csv,
+            file_name=f"marine_detection_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime='text/csv',
+        )
+    else:
+        st.info("No debris detected with the current sensitivity settings.")
+
+else:
+    # Empty State
+    st.markdown("<div style='height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px dashed rgba(255,255,255,0.1); border-radius: 20px; color: rgba(255,255,255,0.4);'>", unsafe_allow_html=True)
+    st.markdown("<h3>Ready for Input</h3>", unsafe_allow_html=True)
+    st.markdown("<p>Upload a marine survey image to begin artificial intelligence detection.</p>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# Professional Footer
+st.markdown("---")
+footer_col1, footer_col2, footer_col3 = st.columns(3)
+with footer_col1:
+    st.markdown("**Marine Debris AI Project**")
+    st.markdown("v1.2.0 Standard Edition")
+with footer_col2:
+    st.markdown("<div style='text-align: center;'>Developed for Ecological Research & Monitoring</div>", unsafe_allow_html=True)
+with footer_col3:
+    st.markdown("<div style='text-align: right;'>© 2026 Advanced AI Solutions</div>", unsafe_allow_html=True)
